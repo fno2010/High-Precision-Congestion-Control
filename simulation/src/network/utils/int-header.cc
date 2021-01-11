@@ -34,12 +34,21 @@ void IntHeader::PushHop(uint64_t time, uint64_t bytes, uint32_t qlen, uint64_t r
 	}
 }
 
+void IntHeader::PushHop(uint64_t time, uint64_t bytes, uint32_t qlen, uint64_t rate, uint32_t swId){
+	if (mode == NORMAL){
+		uint32_t idx = nhop % maxHop;
+		hop[idx].Set(time, bytes, qlen, rate, swId);
+		nhop++;
+	}
+}
+
 void IntHeader::Serialize (Buffer::Iterator start) const{
 	Buffer::Iterator i = start;
 	if (mode == NORMAL){
 		for (uint32_t j = 0; j < maxHop; j++){
 			i.WriteU32(hop[j].buf[0]);
 			i.WriteU32(hop[j].buf[1]);
+			i.WriteU32(hop[j].buf[2]);
 		}
 		i.WriteU16(nhop);
 	}else if (mode == TS){
@@ -58,6 +67,7 @@ uint32_t IntHeader::Deserialize (Buffer::Iterator start){
 		for (uint32_t j = 0; j < maxHop; j++){
 			hop[j].buf[0] = i.ReadU32();
 			hop[j].buf[1] = i.ReadU32();
+			hop[j].buf[2] = i.ReadU32();
 		}
 		nhop = i.ReadU16();
 	}else if (mode == TS){

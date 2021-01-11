@@ -2,6 +2,7 @@
 #include <ns3/seq-ts-header.h>
 #include <ns3/udp-header.h>
 #include <ns3/ipv4-header.h>
+#include "ns3/point-to-point-helper.h"
 #include "ns3/ppp-header.h"
 #include "ns3/boolean.h"
 #include "ns3/uinteger.h"
@@ -611,7 +612,7 @@ void RdmaHw::ChangeRate(Ptr<RdmaQueuePair> qp, DataRate new_rate){
 	qp->m_rate = new_rate;
 }
 
-#define PRINT_LOG 0
+#define PRINT_LOG 1
 /******************************
  * Mellanox's version of DCQCN
  *****************************/
@@ -754,6 +755,10 @@ void RdmaHw::HandleAckHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch)
 void RdmaHw::UpdateRateHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch, bool fast_react){
 	uint32_t next_seq = qp->snd_nxt;
 	bool print = !fast_react || true;
+	#if PRINT_LOG
+	if (print)
+		printf("%08x: ", qp->GetHash());
+	#endif
 	if (qp->hp.m_lastUpdateSeq == 0){ // first RTT
 		qp->hp.m_lastUpdateSeq = next_seq;
 		// store INT
@@ -784,15 +789,32 @@ void RdmaHw::UpdateRateHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch
 			uint64_t dt = 0;
 			bool updated[IntHeader::maxHop] = {false}, updated_any = false;
 			NS_ASSERT(ih.nhop <= IntHeader::maxHop);
+			#if PRINT_LOG
+			if (print)
+				printf(" OK nhop %u\n", ih.nhop);
+			#endif
 			for (uint32_t i = 0; i < ih.nhop; i++){
+				#if PRINT_LOG
+				if (print)
+					printf("OK hop %u\n", i);
+				#endif
 				if (m_sampleFeedback){
 					if (ih.hop[i].GetQlen() == 0 and fast_react)
 						continue;
 				}
+				#if PRINT_LOG
+				if (print)
+					printf("OK hop %u ready\n", i);
+				#endif
 				updated[i] = updated_any = true;
 				#if PRINT_LOG
 				if (print)
 					printf(" %u(%u) %lu(%lu) %lu(%lu)", ih.hop[i].GetQlen(), qp->hp.hop[i].GetQlen(), ih.hop[i].GetBytes(), qp->hp.hop[i].GetBytes(), ih.hop[i].GetTime(), qp->hp.hop[i].GetTime());
+				#endif
+				// TODO: compute inflight measurement using fine-grained records
+				#if PRINT_LOG
+				if (0)
+					printf(" <swId: %u>", ih.hop[i].GetSwitchId());
 				#endif
 				uint64_t tau = ih.hop[i].GetTimeDelta(qp->hp.hop[i]);;
 				double duration = tau * 1e-9;
@@ -827,6 +849,11 @@ void RdmaHw::UpdateRateHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch
 					if (dt > qp->m_baseRtt)
 						dt = qp->m_baseRtt;
 					qp->hp.u = (qp->hp.u * (qp->m_baseRtt - dt) + U * dt) / double(qp->m_baseRtt);
+					// TODO: compute inflight measurement using fine-grained records
+					#if PRINT_LOG
+					if (0)
+						printf(" <Total Device Num: %u>", NodeContainer::GetGlobal().GetN());
+					#endif
 					max_c = qp->hp.u / m_targetUtil;
 
 					if (max_c >= 1 || qp->hp.m_incStage >= m_miThresh){

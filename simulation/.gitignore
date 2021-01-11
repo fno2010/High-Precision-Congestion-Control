@@ -1,0 +1,7 @@
+build/
+mix/
+tmp/
+waf-tools/
+*.pyc
+.lock-*
+.waf-*

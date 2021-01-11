@@ -19,8 +19,9 @@ public:
 					 time: timeWidth,
 					 bytes: bytesWidth,
 					 qlen: qlenWidth;
+			uint32_t swId;
 		};
-		uint32_t buf[2];
+		uint32_t buf[3];
 	};
 
 	static const uint32_t byteUnit = 128;
@@ -38,6 +39,9 @@ public:
 	}
 	uint64_t GetTime(){
 		return time;
+	}
+	uint32_t GetSwitchId(){
+		return swId;
 	}
 	void Set(uint64_t _time, uint64_t _bytes, uint32_t _qlen, uint64_t _rate){
 		time = _time;
@@ -58,6 +62,10 @@ public:
 				printf("Error: IntHeader unknown rate: %lu\n", _rate);
 				break;
 		}
+	}
+	void Set(uint64_t _time, uint64_t _bytes, uint32_t _qlen, uint64_t _rate, uint32_t _swId){
+		Set(_time, _bytes, _qlen, _rate);
+		swId = _swId;
 	}
 	uint64_t GetBytesDelta(IntHop &b){
 		if (bytes >= b.bytes)
@@ -103,6 +111,7 @@ public:
 	IntHeader();
 	static uint32_t GetStaticSize();
 	void PushHop(uint64_t time, uint64_t bytes, uint32_t qlen, uint64_t rate);
+	void PushHop(uint64_t time, uint64_t bytes, uint32_t qlen, uint64_t rate, uint32_t swId);
 	void Serialize (Buffer::Iterator start) const;
 	uint32_t Deserialize (Buffer::Iterator start);
 	uint64_t GetTs(void);
