@@ -21,7 +21,7 @@ public:
 					 qlen: qlenWidth;
 			uint32_t swId;
 		};
-		uint32_t buf[3];
+		uint32_t buf[4];
 	};
 
 	static const uint32_t byteUnit = 128;

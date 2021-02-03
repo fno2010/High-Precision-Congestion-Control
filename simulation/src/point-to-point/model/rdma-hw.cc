@@ -13,6 +13,7 @@
 #include "ppp-header.h"
 #include "qbb-header.h"
 #include "cn-header.h"
+#include "switch-node.h"
 
 namespace ns3{
 
@@ -790,22 +791,14 @@ void RdmaHw::UpdateRateHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch
 			bool updated[IntHeader::maxHop] = {false}, updated_any = false;
 			NS_ASSERT(ih.nhop <= IntHeader::maxHop);
 			#if PRINT_LOG
-			if (print)
-				printf(" OK nhop %u\n", ih.nhop);
+			if (0)
+				printf(" OK nhop %u size %u\n", ih.nhop, ih.GetStaticSize());
 			#endif
 			for (uint32_t i = 0; i < ih.nhop; i++){
-				#if PRINT_LOG
-				if (print)
-					printf("OK hop %u\n", i);
-				#endif
 				if (m_sampleFeedback){
 					if (ih.hop[i].GetQlen() == 0 and fast_react)
 						continue;
 				}
-				#if PRINT_LOG
-				if (print)
-					printf("OK hop %u ready\n", i);
-				#endif
 				updated[i] = updated_any = true;
 				#if PRINT_LOG
 				if (print)
@@ -813,8 +806,10 @@ void RdmaHw::UpdateRateHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch
 				#endif
 				// TODO: compute inflight measurement using fine-grained records
 				#if PRINT_LOG
-				if (0)
-					printf(" <swId: %u>", ih.hop[i].GetSwitchId());
+				uint32_t _swId = ih.hop[i].GetSwitchId();
+				Ptr<SwitchNode> _sw = DynamicCast<SwitchNode>(NodeContainer::GetGlobal().Get(_swId));
+				if (print)
+					printf(" <swId: %u, lastPktSize: %u %u %u>", _swId, _sw->GetLastPktSize(0), _sw->GetLastPktSize(1), _sw->GetLastPktSize(2));
 				#endif
 				uint64_t tau = ih.hop[i].GetTimeDelta(qp->hp.hop[i]);;
 				double duration = tau * 1e-9;
@@ -850,10 +845,6 @@ void RdmaHw::UpdateRateHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch
 						dt = qp->m_baseRtt;
 					qp->hp.u = (qp->hp.u * (qp->m_baseRtt - dt) + U * dt) / double(qp->m_baseRtt);
 					// TODO: compute inflight measurement using fine-grained records
-					#if PRINT_LOG
-					if (0)
-						printf(" <Total Device Num: %u>", NodeContainer::GetGlobal().GetN());
-					#endif
 					max_c = qp->hp.u / m_targetUtil;
 
 					if (max_c >= 1 || qp->hp.m_incStage >= m_miThresh){

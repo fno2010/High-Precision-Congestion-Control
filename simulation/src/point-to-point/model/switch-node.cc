@@ -188,6 +188,7 @@ void SwitchNode::ClearTable(){
 
 // This function can only be called in switch mode
 bool SwitchNode::SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> packet, CustomHeader &ch){
+	// TODO: record pkt enqueue info
 	SendToDev(packet, ch);
 	return true;
 }
@@ -221,9 +222,11 @@ void SwitchNode::SwitchNotifyDequeue(uint32_t ifIndex, uint32_t qIndex, Ptr<Pack
 			IntHeader *ih = (IntHeader*)&buf[PppHeader::GetStaticSize() + 20 + 8 + 6]; // ppp, ip, udp, SeqTs, INT
 			Ptr<QbbNetDevice> dev = DynamicCast<QbbNetDevice>(m_devices[ifIndex]);
 			if (m_ccMode == 3){ // HPCC
-				ih->PushHop(Simulator::Now().GetTimeStep(), m_txBytes[ifIndex], dev->GetQueue()->GetNBytesTotal(), dev->GetDataRate().GetBitRate());
-				// TODO: record pkt info into shared memory
-				// ih->PushHop(Simulator::Now().GetTimeStep(), m_txBytes[ifIndex], dev->GetQueue()->GetNBytesTotal(), dev->GetDataRate().GetBitRate(), GetId());
+				// printf("push hop\n");
+				// ih->PushHop(Simulator::Now().GetTimeStep(), m_txBytes[ifIndex], dev->GetQueue()->GetNBytesTotal(), dev->GetDataRate().GetBitRate());
+				// TODO: record pkt dequeue info
+				ih->PushHop(Simulator::Now().GetTimeStep(), m_txBytes[ifIndex], dev->GetQueue()->GetNBytesTotal(), dev->GetDataRate().GetBitRate(), GetId());
+				// printf("push hop done %u\n", ih->nhop);
 			}else if (m_ccMode == 10){ // HPCC-PINT
 				uint64_t t = Simulator::Now().GetTimeStep();
 				uint64_t dt = t - m_lastPktTs[ifIndex];
@@ -325,6 +328,73 @@ int SwitchNode::log2apprx(int x, int b, int m, int l){
 		#endif
 	}
 	return int(log2(x) * (1<<logres_shift(b, l)));
+}
+
+uint32_t SwitchNode::GetLastPktSize(uint32_t port){
+	if (port < pCnt){
+		return m_lastPktSize[port];
+	}else {
+		return 0;
+	}
+}
+
+void SwitchNode::AddPktArrivalRecord(uint32_t flowId, uint32_t seqId, uint32_t t){
+	m_arrivalTs[flowId][seqId] = t;
+}
+
+void SwitchNode::AddPktDepartureRecord(uint32_t flowId, uint32_t seqId, uint32_t t){
+	m_departureTs[flowId][seqId] = t;
+}
+
+uint32_t SwitchNode::GetArrivalTime(uint32_t flowId, uint32_t seqId){
+	uint32_t _ta = -1;
+	try
+	{
+		std::unordered_map<uint32_t, uint32_t> &_flow = m_arrivalTs.at(flowId);
+		_ta = _flow.at(seqId);
+	}
+	catch(const std::out_of_range& e)
+	{
+		// Nothing to do
+	}
+	return _ta;
+}
+
+uint32_t SwitchNode::GetDepartureTime(uint32_t flowId, uint32_t seqId){
+	uint32_t _td = -1;
+	try
+	{
+		std::unordered_map<uint32_t, uint32_t> &_flow = m_departureTs.at(flowId);
+		_td = _flow.at(seqId);
+	}
+	catch(const std::out_of_range& e)
+	{
+		// Nothing to do
+	}
+	return _td;
+}
+
+uint32_t SwitchNode::GetInflight(uint32_t flowId, uint32_t t){
+	uint32_t _inflight = 0;
+	try
+	{
+		std::unordered_map<uint32_t, uint32_t> &_flowaq = m_arrivalTs.at(flowId);
+		for (const auto &pair : _flowaq){
+			if (pair.second < t){
+				const auto td = SwitchNode::GetDepartureTime(flowId, pair.first);
+				if (td > t){
+					// TODO: increse pkt size to inflight
+				}else {
+					// TODO: remove seqId from _flowaq
+				}
+			}
+		}
+	}
+	catch(const std::out_of_range& e)
+	{
+		// Nothing to do
+	}
+	return _inflight;
 }
 
 } /* namespace ns3 */

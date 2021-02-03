@@ -49,6 +49,7 @@ void IntHeader::Serialize (Buffer::Iterator start) const{
 			i.WriteU32(hop[j].buf[0]);
 			i.WriteU32(hop[j].buf[1]);
 			i.WriteU32(hop[j].buf[2]);
+			i.WriteU32(hop[j].buf[3]);
 		}
 		i.WriteU16(nhop);
 	}else if (mode == TS){
@@ -68,6 +69,7 @@ uint32_t IntHeader::Deserialize (Buffer::Iterator start){
 			hop[j].buf[0] = i.ReadU32();
 			hop[j].buf[1] = i.ReadU32();
 			hop[j].buf[2] = i.ReadU32();
+			hop[j].buf[3] = i.ReadU32();
 		}
 		nhop = i.ReadU16();
 	}else if (mode == TS){

@@ -26,6 +26,10 @@ class SwitchNode : public Node{
 	uint64_t m_lastPktTs[pCnt]; // ns
 	double m_u[pCnt];
 
+	// TODO: map for telemetry
+	std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>> m_arrivalTs;
+	std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>> m_departureTs;
+
 protected:
 	bool m_ecnEnabled;
 	uint32_t m_ccMode;
@@ -53,6 +57,14 @@ public:
 	// for approximate calc in PINT
 	int logres_shift(int b, int l);
 	int log2apprx(int x, int b, int m, int l); // given x of at most b bits, use most significant m bits of x, calc the result in l bits
+
+	// TODO: for global view
+	uint32_t GetLastPktSize(uint32_t port);
+	void AddPktArrivalRecord(uint32_t flowId, uint32_t seqId, uint32_t t);
+	void AddPktDepartureRecord(uint32_t flowId, uint32_t seqId, uint32_t t);
+	uint32_t GetArrivalTime(uint32_t flowId, uint32_t seqId);
+	uint32_t GetDepartureTime(uint32_t flowId, uint32_t seqId);
+	uint32_t GetInflight(uint32_t flowId, uint32_t t);
 };
 
 } /* namespace ns3 */
