@@ -805,16 +805,18 @@ void RdmaHw::UpdateRateHp(Ptr<RdmaQueuePair> qp, Ptr<Packet> p, CustomHeader &ch
 					printf(" %u(%u) %lu(%lu) %lu(%lu)", ih.hop[i].GetQlen(), qp->hp.hop[i].GetQlen(), ih.hop[i].GetBytes(), qp->hp.hop[i].GetBytes(), ih.hop[i].GetTime(), qp->hp.hop[i].GetTime());
 				#endif
 				// TODO: compute inflight measurement using fine-grained records
-				#if PRINT_LOG
 				uint32_t _swId = ih.hop[i].GetSwitchId();
 				Ptr<SwitchNode> _sw = DynamicCast<SwitchNode>(NodeContainer::GetGlobal().Get(_swId));
+				uint32_t _inflight = _sw->GetInflight(qp->GetHash(), Simulator::Now().GetTimeStep());
+				uint32_t _inflightm = std::min(ih.hop[i].GetQlen(), qp->hp.hop[i].GetQlen());
+				#if PRINT_LOG
 				if (print)
-					printf(" <swId: %u, lastPktSize: %u %u %u>", _swId, _sw->GetLastPktSize(0), _sw->GetLastPktSize(1), _sw->GetLastPktSize(2));
+					printf(" <swId: %u, inflight: (%u/%u)>", _swId, _inflight, _inflightm);
 				#endif
 				uint64_t tau = ih.hop[i].GetTimeDelta(qp->hp.hop[i]);;
 				double duration = tau * 1e-9;
 				double txRate = (ih.hop[i].GetBytesDelta(qp->hp.hop[i])) * 8 / duration;
-				double u = txRate / ih.hop[i].GetLineRate() + (double)std::min(ih.hop[i].GetQlen(), qp->hp.hop[i].GetQlen()) * qp->m_max_rate.GetBitRate() / ih.hop[i].GetLineRate() /qp->m_win;
+				double u = txRate / ih.hop[i].GetLineRate() + (double)_inflightm * qp->m_max_rate.GetBitRate() / ih.hop[i].GetLineRate() /qp->m_win;
 				#if PRINT_LOG
 				if (print)
 					printf(" %.3lf %.3lf", txRate, u);

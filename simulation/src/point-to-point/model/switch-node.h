@@ -11,6 +11,13 @@ namespace ns3 {
 
 class Packet;
 
+class PacketRecord{
+public:
+	uint64_t time;
+	uint32_t size;
+};
+
+
 class SwitchNode : public Node{
 	static const uint32_t pCnt = 257;	// Number of ports used
 	static const uint32_t qCnt = 8;	// Number of queues/priorities used
@@ -26,9 +33,9 @@ class SwitchNode : public Node{
 	uint64_t m_lastPktTs[pCnt]; // ns
 	double m_u[pCnt];
 
-	// TODO: map for telemetry
-	std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>> m_arrivalTs;
-	std::unordered_map<uint32_t, std::unordered_map<uint32_t, uint32_t>> m_departureTs;
+	// TODO: map for telemetry (flowId -> (seqId -> (timestamp, pktSize)))
+	std::unordered_map<uint32_t, std::unordered_map<uint32_t, PacketRecord>> m_arrivalTs;
+	std::unordered_map<uint32_t, std::unordered_map<uint32_t, PacketRecord>> m_departureTs;
 
 protected:
 	bool m_ecnEnabled;
@@ -60,10 +67,10 @@ public:
 
 	// TODO: for global view
 	uint32_t GetLastPktSize(uint32_t port);
-	void AddPktArrivalRecord(uint32_t flowId, uint32_t seqId, uint32_t t);
-	void AddPktDepartureRecord(uint32_t flowId, uint32_t seqId, uint32_t t);
-	uint32_t GetArrivalTime(uint32_t flowId, uint32_t seqId);
-	uint32_t GetDepartureTime(uint32_t flowId, uint32_t seqId);
+	void AddPktArrivalRecord(uint32_t flowId, uint32_t seqId, PacketRecord pr);
+	void AddPktDepartureRecord(uint32_t flowId, uint32_t seqId, PacketRecord pr);
+	PacketRecord GetArrivalRecord(uint32_t flowId, uint32_t seqId);
+	PacketRecord GetDepartureRecord(uint32_t flowId, uint32_t seqId);
 	uint32_t GetInflight(uint32_t flowId, uint32_t t);
 };
 

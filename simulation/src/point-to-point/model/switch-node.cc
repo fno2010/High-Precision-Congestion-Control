@@ -14,6 +14,24 @@
 
 namespace ns3 {
 
+inline
+uint32_t
+Hash32 (CustomHeader &ch)
+{
+	union{
+		struct {
+			uint32_t sip, dip;
+			uint16_t sport, dport;
+		};
+		char c[12];
+	} buf;
+	buf.sip = ch.sip;
+	buf.dip = ch.dip;
+	buf.sport = ch.udp.sport;
+	buf.dport = ch.udp.dport;
+	return Hash32(buf.c, 12);
+}
+
 TypeId SwitchNode::GetTypeId (void)
 {
   static TypeId tid = TypeId ("ns3::SwitchNode")
@@ -189,6 +207,9 @@ void SwitchNode::ClearTable(){
 // This function can only be called in switch mode
 bool SwitchNode::SwitchReceiveFromDevice(Ptr<NetDevice> device, Ptr<Packet> packet, CustomHeader &ch){
 	// TODO: record pkt enqueue info
+	if (ch.l3Prot == 0x11){ //udp packet
+		AddPktArrivalRecord(Hash32(ch), ch.udp.seq, {Simulator::Now().GetTimeStep(), packet->GetSize()});
+	}
 	SendToDev(packet, ch);
 	return true;
 }
@@ -225,7 +246,11 @@ void SwitchNode::SwitchNotifyDequeue(uint32_t ifIndex, uint32_t qIndex, Ptr<Pack
 				// printf("push hop\n");
 				// ih->PushHop(Simulator::Now().GetTimeStep(), m_txBytes[ifIndex], dev->GetQueue()->GetNBytesTotal(), dev->GetDataRate().GetBitRate());
 				// TODO: record pkt dequeue info
-				ih->PushHop(Simulator::Now().GetTimeStep(), m_txBytes[ifIndex], dev->GetQueue()->GetNBytesTotal(), dev->GetDataRate().GetBitRate(), GetId());
+				uint64_t t = Simulator::Now().GetTimeStep();
+				CustomHeader ch(CustomHeader::L2_Header | CustomHeader::L3_Header | CustomHeader::L4_Header);
+				p->PeekHeader(ch);
+				AddPktDepartureRecord(Hash32(ch), ch.udp.seq, {t, p->GetSize()});
+				ih->PushHop(t, m_txBytes[ifIndex], dev->GetQueue()->GetNBytesTotal(), dev->GetDataRate().GetBitRate(), GetId());
 				// printf("push hop done %u\n", ih->nhop);
 			}else if (m_ccMode == 10){ // HPCC-PINT
 				uint64_t t = Simulator::Now().GetTimeStep();
@@ -338,55 +363,68 @@ uint32_t SwitchNode::GetLastPktSize(uint32_t port){
 	}
 }
 
-void SwitchNode::AddPktArrivalRecord(uint32_t flowId, uint32_t seqId, uint32_t t){
-	m_arrivalTs[flowId][seqId] = t;
+void SwitchNode::AddPktArrivalRecord(uint32_t flowId, uint32_t seqId, PacketRecord pr){
+	m_arrivalTs[flowId][seqId] = pr;
 }
 
-void SwitchNode::AddPktDepartureRecord(uint32_t flowId, uint32_t seqId, uint32_t t){
-	m_departureTs[flowId][seqId] = t;
+void SwitchNode::AddPktDepartureRecord(uint32_t flowId, uint32_t seqId, PacketRecord pr){
+	m_departureTs[flowId][seqId] = pr;
 }
 
-uint32_t SwitchNode::GetArrivalTime(uint32_t flowId, uint32_t seqId){
-	uint32_t _ta = -1;
+PacketRecord SwitchNode::GetArrivalRecord(uint32_t flowId, uint32_t seqId){
+	PacketRecord _pr = {0xffffffffffffffff, 0};
 	try
 	{
-		std::unordered_map<uint32_t, uint32_t> &_flow = m_arrivalTs.at(flowId);
-		_ta = _flow.at(seqId);
+		std::unordered_map<uint32_t, PacketRecord> &_flow = m_arrivalTs.at(flowId);
+		auto _it = _flow.find(seqId);
+		if (_it != _flow.end()){
+			_pr = _it->second;
+			_flow.erase(_it);
+		}
 	}
 	catch(const std::out_of_range& e)
 	{
 		// Nothing to do
 	}
-	return _ta;
+	return _pr;
 }
 
-uint32_t SwitchNode::GetDepartureTime(uint32_t flowId, uint32_t seqId){
-	uint32_t _td = -1;
+PacketRecord SwitchNode::GetDepartureRecord(uint32_t flowId, uint32_t seqId){
+	PacketRecord _pr = {0xffffffffffffffff, 0};
 	try
 	{
-		std::unordered_map<uint32_t, uint32_t> &_flow = m_departureTs.at(flowId);
-		_td = _flow.at(seqId);
+		std::unordered_map<uint32_t, PacketRecord> &_flow = m_departureTs.at(flowId);
+		auto _it = _flow.find(seqId);
+		if (_it != _flow.end()){
+			_pr = _it->second;
+			_flow.erase(_it);
+		}
 	}
 	catch(const std::out_of_range& e)
 	{
 		// Nothing to do
 	}
-	return _td;
+	return _pr;
 }
 
 uint32_t SwitchNode::GetInflight(uint32_t flowId, uint32_t t){
 	uint32_t _inflight = 0;
 	try
 	{
-		std::unordered_map<uint32_t, uint32_t> &_flowaq = m_arrivalTs.at(flowId);
-		for (const auto &pair : _flowaq){
-			if (pair.second < t){
-				const auto td = SwitchNode::GetDepartureTime(flowId, pair.first);
-				if (td > t){
-					// TODO: increse pkt size to inflight
+		std::unordered_map<uint32_t, PacketRecord> &_flowaq = m_arrivalTs.at(flowId);
+		for (auto it = _flowaq.begin(); it != _flowaq.end(); ){
+			if (it->second.time < t){
+				const auto td = SwitchNode::GetDepartureRecord(flowId, it->first);
+				if (td.time > t){
+					// increse pkt size to inflight
+					_inflight += it->second.size;
+					++it;
 				}else {
-					// TODO: remove seqId from _flowaq
+					// remove seqId from _flowaq
+					it = _flowaq.erase(it);
 				}
+			}else {
+				++it;
 			}
 		}
 	}
